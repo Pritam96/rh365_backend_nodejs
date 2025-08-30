@@ -1,29 +1,38 @@
-import Admin from "../models/admin.model.js";
+import User from "../models/user.model.js";
+import dotenv from "dotenv";
+
+dotenv.config({ path: "./config/config.env" });
 
 const createAdmin = async () => {
   try {
+    const { ADMIN_NAME, ADMIN_EMAIL, ADMIN_PASSWORD } = process.env;
+
+    if (!ADMIN_EMAIL || !ADMIN_PASSWORD || !ADMIN_NAME) {
+      console.log("Configuration error");
+      return;
+    }
+
     // Check if admin already exists
-    const existingAdmin = await Admin.findOne({ email: "admin@jobportal.com" });
+    const existingAdmin = await User.findOne({ email: "admin@jobportal.com" });
 
     if (existingAdmin) {
       console.log("✅ Admin already exists!");
-      return; // Don't exit process, just return
+      return;
     }
 
     // Create admin
-    const admin = await Admin.create({
-      name: "Job Portal Admin",
-      email: "admin@jobportal.com",
-      password: "admin123", // Change this to a secure password
+    const admin = await User.create({
+      name: ADMIN_NAME,
+      email: ADMIN_EMAIL,
+      role: "admin",
+      password: ADMIN_PASSWORD,
     });
 
-    console.log("🎉 Admin created successfully!");
-    console.log("📧 Email: admin@jobportal.com");
-    console.log("🔑 Password: admin123");
-    console.log("⚠️  Please change the password after first login!");
+    console.log(`🎉 Admin created successfully!`);
+    console.log(`📧 Email: ${ADMIN_EMAIL}`);
+    console.log(`🔑 Password: ${ADMIN_PASSWORD}`);
   } catch (error) {
     console.error("❌ Error creating admin:", error.message);
-    // Don't exit process, just log the error
   }
 };
 

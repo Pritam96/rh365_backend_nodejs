@@ -1,6 +1,7 @@
-import multer from "multer";
-import path from "path";
 import fs from "fs";
+import path from "path";
+import multer from "multer";
+import { uploadService } from "../services/uploadService.js";
 
 // Resume/CV specific MIME types (more restrictive for security)
 const RESUME_MIME_TYPES = [
@@ -211,6 +212,30 @@ export const cleanupOldFiles = (
       });
     });
   });
+};
+
+// Delete local file
+export const deleteLocalFile = (filePath) => {
+  if (!filePath) return;
+  fs.unlink(filePath, (err) => {
+    if (err) console.error(`Error deleting local file ${filePath}:`, err);
+  });
+};
+
+// Delete S3 file
+export const deleteS3File = async (key) => {
+  if (!key) return;
+  try {
+    await uploadService.deleteFile(key); // <-- make sure your uploadService has this method
+  } catch (err) {
+    console.error(`Error deleting S3 file ${key}:`, err.message);
+  }
+};
+
+// Delete both local + S3 files
+export const cleanupFiles = async (localPath, s3Key) => {
+  deleteLocalFile(localPath);
+  await deleteS3File(s3Key);
 };
 
 // Export default for backward compatibility

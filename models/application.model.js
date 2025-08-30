@@ -72,9 +72,16 @@ const ApplicationSchema = new mongoose.Schema(
       default: "pending",
     },
 
-    // Admin Notes
+    // HR Notes
     notes: {
       type: String,
+      default: null,
+    },
+
+    // HR who updated status
+    managedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
       default: null,
     },
   },

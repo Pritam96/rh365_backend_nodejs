@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
-const AdminSchema = new mongoose.Schema(
+const UserSchema = new mongoose.Schema(
   {
     email: {
       type: String,
@@ -10,6 +10,21 @@ const AdminSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
+      match: [
+        /^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/,
+        "Please add a valid email",
+      ],
+    },
+    phone: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
+    designation: {
+      type: String,
+    },
+    avatar: {
+      type: String,
     },
     password: {
       type: String,
@@ -19,12 +34,12 @@ const AdminSchema = new mongoose.Schema(
     },
     name: {
       type: String,
-      required: [true, "Please add a name"],
       trim: true,
     },
     role: {
       type: String,
-      default: "admin",
+      default: "hr",
+      enum: ["admin", "hr"],
     },
   },
   {
@@ -33,7 +48,7 @@ const AdminSchema = new mongoose.Schema(
 );
 
 // Encrypt password before saving
-AdminSchema.pre("save", async function (next) {
+UserSchema.pre("save", async function (next) {
   if (!this.isModified("password")) {
     next();
   }
@@ -42,17 +57,17 @@ AdminSchema.pre("save", async function (next) {
 });
 
 // Match password
-AdminSchema.methods.matchPassword = async function (enteredPassword) {
+UserSchema.methods.matchPassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
 // Sign JWT and return
-AdminSchema.methods.getSignedJwtToken = function () {
+UserSchema.methods.getSignedJwtToken = function () {
   return jwt.sign({ id: this._id }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRE || "30d",
   });
 };
 
-const Admin = mongoose.model("Admin", AdminSchema);
+const User = mongoose.model("User", UserSchema);
 
-export default Admin;
+export default User;

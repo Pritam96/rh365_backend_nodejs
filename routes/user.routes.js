@@ -2,16 +2,38 @@ import express from "express";
 
 import { resumeUpload } from "../middlewares/multer.js";
 import {
+  createJob,
+  getAllApplications,
   getAllJobs,
+  getApplication,
   getJobById,
   submitApplication,
+  updateApplicationStatus,
 } from "../controllers/user.controller.js";
+import { protect } from "../middlewares/auth.js";
+import { handleMulterError, jobImageUpload } from "../middlewares/multer.js";
 
 const router = express.Router();
 
-router.post("/apply", resumeUpload.single("resume"), submitApplication);
+// public routes ====================
+router.post("/jobs/apply", resumeUpload.single("resume"), submitApplication);
+router.get("/jobs", getAllJobs);
+router.get("/jobs/:id", getJobById);
 
-router.get("/", getAllJobs);
-router.get("/:id", getJobById);
+// protected routes ==================
+
+// job post management
+router.post(
+  "/jobs/create",
+  protect,
+  jobImageUpload.single("jobImage"),
+  handleMulterError,
+  createJob
+);
+
+// application management
+router.get("/applications/", protect, getAllApplications);
+router.get("/applications/:id", protect, getApplication);
+router.put("/applications/:id/status", protect, updateApplicationStatus);
 
 export default router;
