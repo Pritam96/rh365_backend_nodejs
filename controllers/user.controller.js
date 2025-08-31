@@ -7,7 +7,6 @@ import { cleanupFiles } from "../middlewares/multer.js";
 export const submitApplication = async (req, res, next) => {
   try {
     const {
-      jobId,
       firstName,
       lastName,
       email,
@@ -20,6 +19,7 @@ export const submitApplication = async (req, res, next) => {
     } = req.body;
 
     // === BASIC VALIDATIONS ===
+    const jobId = req.params?.id;
     if (!jobId) {
       return next(new ErrorResponse("Job ID is required", 400));
     }
@@ -282,6 +282,258 @@ export const getJobById = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: job,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateJob = async (req, res, next) => {
+  try {
+    let {
+      jobTitle,
+      technologies,
+      location,
+      jobType,
+      salary,
+      description,
+      company,
+      referralReward,
+      skills,
+      experience,
+      responsibilities,
+      qualifications,
+      isActive,
+    } = req.body;
+
+    // === PARSE ARRAYS FROM FORM-DATA ===
+    const parseArray = (field) => {
+      if (!field) return [];
+      if (Array.isArray(field)) return field;
+      if (typeof field === "string") {
+        try {
+          return JSON.parse(field);
+        } catch (e) {
+          return field
+            .split(",")
+            .map((item) => item.trim())
+            .filter((item) => item.length > 0);
+        }
+      }
+      return [];
+    };
+
+    // Parse all array fields
+    if (technologies) technologies = parseArray(technologies);
+    if (skills) skills = parseArray(skills);
+    if (experience) experience = parseArray(experience);
+    if (responsibilities) responsibilities = parseArray(responsibilities);
+    if (qualifications) qualifications = parseArray(qualifications);
+
+    // === CHECK IF JOB EXISTS ===
+    const existingJob = await Job.findById(req.params.id);
+    if (!existingJob) {
+      return next(new ErrorResponse("Job not found", 404));
+    }
+
+    // === BASIC VALIDATIONS (only if fields are provided) ===
+    if (jobTitle !== undefined && !jobTitle?.trim()) {
+      return next(new ErrorResponse("Job title cannot be empty", 400));
+    }
+    if (location !== undefined && !location?.trim()) {
+      return next(new ErrorResponse("Location cannot be empty", 400));
+    }
+    if (jobType !== undefined && !jobType?.trim()) {
+      return next(new ErrorResponse("Job type cannot be empty", 400));
+    }
+    if (description !== undefined && !description?.trim()) {
+      return next(new ErrorResponse("Job description cannot be empty", 400));
+    }
+    if (company !== undefined && !company?.trim()) {
+      return next(new ErrorResponse("Company name cannot be empty", 400));
+    }
+
+    // === LENGTH VALIDATIONS ===
+    if (jobTitle && jobTitle.length > 100) {
+      return next(
+        new ErrorResponse("Job title cannot exceed 100 characters", 400)
+      );
+    }
+    if (description && description.length > 2000) {
+      return next(
+        new ErrorResponse("Job description cannot exceed 2000 characters", 400)
+      );
+    }
+
+    // === JOB TYPE VALIDATION ===
+    if (jobType) {
+      const validJobTypes = [
+        "Full Time / Permanent",
+        "Part Time",
+        "Contract",
+        "Freelance",
+        "Internship",
+        "Remote",
+        "Hybrid",
+      ];
+      if (!validJobTypes.includes(jobType)) {
+        return next(
+          new ErrorResponse(
+            `Invalid job type. Valid options: ${validJobTypes.join(", ")}`,
+            400
+          )
+        );
+      }
+    }
+
+    // === ARRAY VALIDATIONS ===
+    if (technologies && !Array.isArray(technologies)) {
+      return next(new ErrorResponse("Technologies must be an array", 400));
+    }
+    if (skills && !Array.isArray(skills)) {
+      return next(new ErrorResponse("Skills must be an array", 400));
+    }
+    if (experience && !Array.isArray(experience)) {
+      return next(new ErrorResponse("Experience must be an array", 400));
+    }
+    if (responsibilities && !Array.isArray(responsibilities)) {
+      return next(new ErrorResponse("Responsibilities must be an array", 400));
+    }
+    if (qualifications && !Array.isArray(qualifications)) {
+      return next(new ErrorResponse("Qualifications must be an array", 400));
+    }
+
+    // === FILE UPLOAD VALIDATION ===
+    let jobImageUrl = existingJob.jobImg; // Keep existing image by default
+
+    if (req.file) {
+      const allowedTypes = [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/webp",
+      ];
+      if (!allowedTypes.includes(req.file.mimetype)) {
+        return next(
+          new ErrorResponse("Only JPEG, PNG, and WebP images are allowed", 400)
+        );
+      }
+
+      if (req.file.size > 5 * 1024 * 1024) {
+        return next(new ErrorResponse("Image size cannot exceed 5MB", 400));
+      }
+
+      try {
+        const uploadResult = await uploadService.uploadJobImage(
+          req.file.path,
+          jobTitle || existingJob.jobTitle
+        );
+        jobImageUrl = uploadResult.url;
+
+        // Optionally delete old image from S3
+        if (existingJob.jobImg && existingJob.jobImg !== jobImageUrl) {
+          try {
+            // Extract key from URL and delete
+            const oldImageKey = existingJob.jobImg.split(".amazonaws.com/")[1];
+            if (oldImageKey) {
+              await uploadService.deleteFile(oldImageKey);
+            }
+          } catch (deleteError) {
+            console.log("Failed to delete old image:", deleteError.message);
+          }
+        }
+      } catch (uploadError) {
+        return next(
+          new ErrorResponse(`Image upload failed: ${uploadError.message}`, 500)
+        );
+      }
+    }
+
+    // === BUILD UPDATE DATA ===
+    const updateData = {};
+
+    if (jobTitle !== undefined) updateData.jobTitle = jobTitle.trim();
+    if (technologies !== undefined) updateData.technologies = technologies;
+    if (location !== undefined) updateData.location = location.trim();
+    if (jobType !== undefined) updateData.jobType = jobType;
+    if (salary !== undefined) updateData.salary = salary?.trim() || null;
+    if (description !== undefined) updateData.description = description.trim();
+    if (company !== undefined) updateData.company = company.trim();
+    if (referralReward !== undefined)
+      updateData.referralReward = referralReward?.trim() || null;
+    if (skills !== undefined) updateData.skills = skills;
+    if (experience !== undefined) updateData.experience = experience;
+    if (responsibilities !== undefined)
+      updateData.responsibilities = responsibilities;
+    if (qualifications !== undefined)
+      updateData.qualifications = qualifications;
+    if (isActive !== undefined) updateData.isActive = isActive;
+    if (jobImageUrl !== existingJob.jobImg) updateData.jobImg = jobImageUrl;
+
+    // === UPDATE JOB ===
+    const updatedJob = await Job.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+      runValidators: true,
+    }).populate("postedBy", "name email");
+
+    res.status(200).json({
+      success: true,
+      message: "Job updated successfully",
+      data: updatedJob,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteJob = async (req, res, next) => {
+  try {
+    // === CHECK IF JOB EXISTS ===
+    const job = await Job.findById(req.params.id);
+    if (!job) {
+      return next(new ErrorResponse("Job not found", 404));
+    }
+
+    // === CHECK FOR EXISTING APPLICATIONS ===
+    const applicationCount = await Application.countDocuments({
+      jobId: req.params.id,
+    });
+
+    if (applicationCount > 0) {
+      return next(
+        new ErrorResponse(
+          `Cannot delete job. There are ${applicationCount} applications for this job. Please handle applications first or deactivate the job instead.`,
+          400
+        )
+      );
+    }
+
+    // === DELETE JOB IMAGE FROM S3 (if exists) ===
+    if (job.jobImg) {
+      try {
+        // Extract S3 key from URL
+        const imageKey = job.jobImg.split(".amazonaws.com/")[1];
+        if (imageKey) {
+          await uploadService.deleteFile(imageKey);
+          console.log(`Deleted job image: ${imageKey}`);
+        }
+      } catch (deleteError) {
+        console.log("Failed to delete job image from S3:", deleteError.message);
+        // Continue with job deletion even if image deletion fails
+      }
+    }
+
+    // === DELETE JOB FROM DATABASE ===
+    await Job.findByIdAndDelete(req.params.id);
+
+    res.status(200).json({
+      success: true,
+      message: "Job deleted successfully",
+      data: {
+        deletedJobId: req.params.id,
+        deletedJobTitle: job.jobTitle,
+        deletedAt: new Date(),
+      },
     });
   } catch (error) {
     next(error);
