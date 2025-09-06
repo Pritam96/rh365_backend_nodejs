@@ -187,10 +187,14 @@ export const getAllJobs = async (req, res, next) => {
       location,
       jobType,
       company,
+      isActive,
     } = req.query;
 
     // Build filter object
-    let filter = { isActive: true };
+    let filter = {};
+    if (isActive !== undefined) {
+      filter.isActive = isActive;
+    }
 
     // Search functionality
     if (search) {
@@ -273,10 +277,6 @@ export const getJobById = async (req, res, next) => {
 
     if (!job) {
       return next(new ErrorResponse("Job not found", 404));
-    }
-
-    if (!job.isActive) {
-      return next(new ErrorResponse("Job not available", 404));
     }
 
     res.status(200).json({
